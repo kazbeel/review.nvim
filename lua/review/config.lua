@@ -25,6 +25,7 @@ local M = {}
 ---@field list_comments string|false
 ---@field export_clipboard string|false
 ---@field send_sidekick string|false
+---@field send_avante string|false
 ---@field clear_comments string|false
 ---@field close string|false
 ---@field toggle_readonly string|false
@@ -72,6 +73,7 @@ M.defaults = {
     list_comments = "c",
     export_clipboard = "C",
     send_sidekick = "S",
+    send_avante = "a",
     clear_comments = "<C-r>",
     close = "q",
     toggle_readonly = "R",

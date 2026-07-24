@@ -116,4 +116,22 @@ function M.to_sidekick()
   notify(string.format("Sent %d comment(s) to sidekick", count), vim.log.levels.INFO)
 end
 
+function M.to_avante()
+  local ok, avante_api = pcall(require, "avante.api")
+  if not ok then
+    notify("avante.nvim not installed", vim.log.levels.ERROR)
+    return
+  end
+
+  local count = store.count()
+  if count == 0 then
+    notify("No comments to send", vim.log.levels.WARN)
+    return
+  end
+
+  local markdown = M.generate_markdown()
+  avante_api.ask({ question = markdown })
+  notify(string.format("Sent %d comment(s) to avante", count), vim.log.levels.INFO)
+end
+
 return M

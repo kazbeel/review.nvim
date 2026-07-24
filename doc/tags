@@ -1,4 +1,5 @@
 :Review	review.txt	/*:Review*
+:Review-avante	review.txt	/*:Review-avante*
 :Review-clear	review.txt	/*:Review-clear*
 :Review-close	review.txt	/*:Review-close*
 :Review-commits	review.txt	/*:Review-commits*

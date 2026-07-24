@@ -13,6 +13,7 @@ Inspired by [tuicr](https://github.com/agavra/tuicr).
 - Auto-export comments to clipboard when closing
 - Export format optimized for AI conversations
 - Send comments directly to [sidekick.nvim](https://github.com/folke/sidekick.nvim) for AI chat
+- Send comments directly to [avante.nvim](https://github.com/yetone/avante.nvim) for AI chat
 - Commit picker modal to select specific commits to review
 - Built on top of codediff.nvim
 
@@ -57,6 +58,7 @@ Using lazy.nvim:
 :Review export       " Export comments to clipboard
 :Review preview      " Preview exported markdown in split
 :Review sidekick     " Send comments to sidekick.nvim
+:Review avante       " Send comments to avante.nvim
 :Review list         " List all comments
 :Review clear        " Clear all comments
 :Review toggle       " Toggle readonly/edit mode
@@ -72,7 +74,7 @@ For multi-line comments, visually select the range first then press `i`. For fil
 
 Use `]n` and `[n` to jump between comments, `e` to edit one, `d` to delete. Press `c` to see a list of all comments across files and jump to any of them.
 
-When you're done, press `q` to close the review. This automatically copies all your comments to the clipboard as structured markdown and shows a preview. Paste it into Claude Code, sidekick.nvim (`S`), or wherever you're chatting with an AI. The format looks like this:
+When you're done, press `q` to close the review. This automatically copies all your comments to the clipboard as structured markdown and shows a preview. Paste it into Claude Code, sidekick.nvim (`S`), avante.nvim (`a`), or wherever you're chatting with an AI. The format looks like this:
 
 ```
 1. **[ISSUE]** `src/api.ts:23` - This endpoint doesn't handle errors
@@ -98,6 +100,7 @@ Lines prefixed with `~` refer to the old (left) side of the diff. Comments persi
 | `[n` | Jump to previous comment |
 | `C` | Export to clipboard and show preview |
 | `S` | Send comments to sidekick.nvim |
+| `a` | Send comments to avante.nvim |
 | `<C-r>` | Clear all comments |
 | `q` | Close and export comments to clipboard |
 | `t` | Toggle side-by-side/inline layout |
@@ -141,6 +144,7 @@ All keymaps can be set to `false` to disable them.
 | `list_comments` | `c` | List all comments |
 | `export_clipboard` | `C` | Export to clipboard |
 | `send_sidekick` | `S` | Send comments to sidekick |
+| `send_avante` | `a` | Send comments to avante |
 | `clear_comments` | `<C-r>` | Clear all comments |
 | `close` | `q` | Close and export |
 | `toggle_readonly` | `R` | Toggle readonly/edit mode |

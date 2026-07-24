@@ -20,8 +20,8 @@ CONTENTS                                                     *review-contents*
 
 review.nvim adds code review annotations on top of |codediff.nvim|. You can
 leave comments (notes, suggestions, issues, praise) on specific lines in a
-diff view, then export them to clipboard or send them to sidekick.nvim for AI
-chat.
+diff view, then export them to clipboard or send them to sidekick.nvim or
+avante.nvim for AI chat.
 
 Features:
 - Line and range comments with box-style virtual text
@@ -70,6 +70,9 @@ All commands use the `:Review` prefix.
 
                                                             *:Review-sidekick*
 :Review sidekick            Send comments to sidekick.nvim.
+
+                                                             *:Review-avante*
+:Review avante              Send comments to avante.nvim.
 
                                                                 *:Review-list*
 :Review list                List all comments with a picker to jump to any.
@@ -177,6 +180,7 @@ ACTIONS                                               *review-keymaps-actions*
     Key         Description ~
     `C`           Export to clipboard + preview          |n|
     `S`           Send to sidekick.nvim                  |n|
+    `a`           Send to avante.nvim                    |n|
     `<C-r>`       Clear all comments                     |n|
     `R`           Toggle readonly/edit mode               |n|
     `q`           Export & close review                   |n|

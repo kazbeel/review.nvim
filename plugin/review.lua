@@ -10,6 +10,7 @@ local subcommands = {
   export = { fn = function() require("review").export() end, desc = "Export comments to clipboard" },
   preview = { fn = function() require("review").preview() end, desc = "Preview exported markdown" },
   sidekick = { fn = function() require("review.export").to_sidekick() end, desc = "Send comments to sidekick.nvim" },
+  avante = { fn = function() require("review.export").to_avante() end, desc = "Send comments to avante.nvim" },
   clear = { fn = function() require("review").clear() end, desc = "Clear all comments" },
   list = { fn = function() require("review.comments").list() end, desc = "List all comments" },
   toggle = { fn = function() require("review").toggle_readonly() end, desc = "Toggle readonly/edit mode" },
