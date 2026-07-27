@@ -320,6 +320,9 @@ function M.setup_keymaps(tabpage)
     callback = function()
       if vim.api.nvim_get_current_tabpage() ~= tabpage then return end
       if not lifecycle.get_session(tabpage) then return end
+      -- Don't apply review keymaps to floating windows (e.g. comment input popups)
+      local win_config = vim.api.nvim_win_get_config(0)
+      if win_config.relative and win_config.relative ~= "" then return end
       set_buffer_keymaps(vim.api.nvim_get_current_buf())
     end,
   })
