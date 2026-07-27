@@ -54,4 +54,36 @@ describe("review.export", function()
       assert.not_matches("~10", md)
     end)
   end)
+
+  describe("to_avante", function()
+    local asked, saved_avante
+
+    before_each(function()
+      asked = nil
+      -- Inject a fake avante.api module
+      saved_avante = package.loaded["avante.api"]
+      package.loaded["avante.api"] = {
+        ask = function(opts) asked = opts end,
+      }
+    end)
+
+    after_each(function()
+      package.loaded["avante.api"] = saved_avante
+    end)
+
+    it("does nothing when no comments", function()
+      export.to_avante()
+      assert.is_nil(asked)
+    end)
+
+    it("sends generated markdown as question to avante", function()
+      store.add("src/main.lua", 10, "issue", "Fix this bug")
+
+      export.to_avante()
+
+      assert.is_not_nil(asked)
+      assert.matches("src/main.lua:10", asked.question)
+      assert.matches("%[ISSUE%]", asked.question)
+    end)
+  end)
 end)
