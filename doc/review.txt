@@ -49,7 +49,15 @@ All commands use the `:Review` prefix.
 
 :Review open                Same as `:Review`.
 
-                                                             *:Review-commits*
+                                                           *:Review-codebase*
+:Review codebase [{path}]   Review code without diff context. With {path},
+                            opens that file; without it, reviews the current
+                            buffer. Focusing other file buffers enrolls them
+                            into the same session. Closing the session keeps
+                            the buffers open and restores their editing
+                            state.
+
+                                                              *:Review-commits*
 :Review commits             Open commit picker (last 50 commits). Use
                             `<Space>` to select from the newest commit down
                             to the cursor, `<CR>` to confirm.
@@ -78,8 +86,9 @@ All commands use the `:Review` prefix.
                                                                 *:Review-list*
 :Review list                List all comments with a picker to jump to any.
 
-                                                               *:Review-clear*
-:Review clear               Clear all comments.
+                                                                *:Review-clear*
+:Review clear               Clear all comments and delete every persisted
+                            notes file for the current project.
 
                                                               *:Review-toggle*
 :Review toggle              Toggle between readonly and edit mode.

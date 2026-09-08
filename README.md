@@ -51,6 +51,8 @@ Using lazy.nvim:
 ```vim
 :Review              " Open codediff with comment keymaps (default)
 :Review open         " Same as above
+:Review codebase     " Review plain code without a diff (current buffer)
+:Review codebase src/foo.lua  " Start a plain-code review from a file
 :Review commits      " Select commits to review (picker modal)
 :Review commits SHA  " Review a single commit (diffs SHA^ against SHA)
 :Review commits REV1 REV2  " Review specific revision range (skips picker)
@@ -60,7 +62,7 @@ Using lazy.nvim:
 :Review sidekick     " Send comments to sidekick.nvim
 :Review avante       " Send comments to avante.nvim
 :Review list         " List all comments
-:Review clear        " Clear all comments
+:Review clear        " Clear all comments and persisted notes for this project
 :Review toggle       " Toggle readonly/edit mode
 ```
 

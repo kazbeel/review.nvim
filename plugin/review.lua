@@ -5,8 +5,7 @@ vim.g.loaded_review = true
 
 local subcommands = {
   open = { fn = function() require("review").open() end, desc = "Open codediff with review" },
-  file = { fn = function(args) require("review").open_file(args[1]) end, desc = "Review a plain source file without diff context" },
-  buffer = { fn = function() require("review").open_buffer() end, desc = "Review the current buffer without diff context" },
+  codebase = { fn = function(args) require("review").open_codebase(args[1]) end, desc = "Review code without diff context (optional: file to start from)" },
   commits = { fn = function(args) require("review").open_commits(args[1], args[2]) end, desc = "Select commits to review (optional: SHA or rev1 rev2)" },
   close = { fn = function() require("review").close() end, desc = "Close and export to clipboard" },
   export = { fn = function() require("review").export() end, desc = "Export comments to clipboard" },

@@ -11,6 +11,61 @@ local comments = require("review.comments")
 
 local initialized = false
 local augroup = nil
+local plain_augroup = nil
+
+---BufEnter handler: auto-join focused file buffers into the active plain session
+local function on_plain_buf_enter()
+  if not hooks.has_plain_session() then
+    return
+  end
+  local cfg = config.get()
+
+  local bufnr = vim.api.nvim_get_current_buf()
+  if hooks.get_plain_buffers()[bufnr] then
+    return
+  end
+
+  -- Only normal, named, readable file buffers join automatically
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if not name or name == "" then
+    return
+  end
+  if vim.bo[bufnr].buftype ~= "" then
+    return
+  end
+  if vim.fn.filereadable(name) == 0 then
+    return
+  end
+  local win_config = vim.api.nvim_win_get_config(0)
+  if win_config.relative and win_config.relative ~= "" then
+    return
+  end
+
+  hooks.set_current_file(vim.fn.fnamemodify(name, ":p"), bufnr)
+  keymaps.setup_plain_keymaps(bufnr)
+  if not cfg.codebase or cfg.codebase.winbar ~= false then
+    require("review.winbar").apply(vim.api.nvim_get_current_win())
+  end
+  require("review.marks").refresh()
+end
+
+local function start_plain_session_tracking()
+  if plain_augroup then
+    return
+  end
+  plain_augroup = vim.api.nvim_create_augroup("review_plain_session", { clear = true })
+  vim.api.nvim_create_autocmd("BufEnter", {
+    group = plain_augroup,
+    callback = on_plain_buf_enter,
+  })
+end
+
+local function stop_plain_session_tracking()
+  if plain_augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, plain_augroup)
+    plain_augroup = nil
+  end
+end
 
 ---@param opts? ReviewConfig
 function M.setup(opts)
@@ -84,6 +139,7 @@ local function open_codediff_with_revisions(rev1, rev2)
   -- A diff review ends any active plain session (storage key must switch)
   hooks.clear_current_file()
   storage.clear_plain_session()
+  stop_plain_session_tracking()
   require("review.winbar").clear()
 
   -- Scope storage to revision range for commit reviews
@@ -150,15 +206,10 @@ local function open_plain_review(abs, bufnr)
   end
 
   hooks.set_current_file(abs, bufnr)
-
-  local cfg = config.get()
-  if cfg.codediff.readonly then
-    vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
-    vim.api.nvim_set_option_value("readonly", true, { buf = bufnr })
-  end
-
   keymaps.setup_plain_keymaps(bufnr)
-  if not cfg.plain or cfg.plain.winbar ~= false then
+  start_plain_session_tracking()
+  local cfg = config.get()
+  if not cfg.codebase or cfg.codebase.winbar ~= false then
     local winbar = require("review.winbar")
     winbar.start()
     winbar.apply(vim.api.nvim_get_current_win())
@@ -178,43 +229,43 @@ local function find_buffer_for(abs)
   return nil
 end
 
----Open a source file in plain (no-diff) review mode
+---Open a source file (or the current buffer) in plain (no-diff) review mode
 ---@param path? string file path; defaults to the current buffer
-function M.open_file(path)
+function M.open_codebase(path)
+  local bufnr
+  local abs
+
   if not path or path == "" then
-    return M.open_buffer()
-  end
-
-  local abs = vim.fn.fnamemodify(path, ":p")
-  if vim.fn.filereadable(abs) == 0 then
-    vim.notify("File not found: " .. path, vim.log.levels.ERROR, { title = "review.nvim" })
-    return
-  end
-
-  local bufnr = find_buffer_for(abs)
-  if bufnr then
-    vim.api.nvim_set_current_buf(bufnr)
-  else
-    vim.cmd("edit " .. vim.fn.fnameescape(abs))
     bufnr = vim.api.nvim_get_current_buf()
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if not name or name == "" then
+      vim.notify("Current buffer is not tied to a file", vim.log.levels.ERROR, { title = "review.nvim" })
+      return
+    end
+    abs = vim.fn.fnamemodify(name, ":p")
+  else
+    abs = vim.fn.fnamemodify(path, ":p")
+    if vim.fn.filereadable(abs) == 0 then
+      vim.notify("File not found: " .. path, vim.log.levels.ERROR, { title = "review.nvim" })
+      return
+    end
+
+    bufnr = find_buffer_for(abs)
+    if bufnr then
+      vim.api.nvim_set_current_buf(bufnr)
+    else
+      vim.cmd("edit " .. vim.fn.fnameescape(abs))
+      bufnr = vim.api.nvim_get_current_buf()
+    end
   end
 
   open_plain_review(abs, bufnr)
 end
 
----Open the current buffer in plain (no-diff) review mode
-function M.open_buffer()
-  local bufnr = vim.api.nvim_get_current_buf()
-  local name = vim.api.nvim_buf_get_name(bufnr)
-  if not name or name == "" then
-    vim.notify("Current buffer is not tied to a file", vim.log.levels.ERROR, { title = "review.nvim" })
-    return
-  end
-
-  open_plain_review(vim.fn.fnamemodify(name, ":p"), bufnr)
-end
-
 function M.close()
+  -- Capture the storage path before session state is cleared
+  local notes_path = storage.get_storage_path()
+
   -- Export comments to clipboard before closing
   local count = store.count()
   if count > 0 then
@@ -224,26 +275,24 @@ function M.close()
     vim.notify(string.format("Exported %d comment(s) to clipboard", count), vim.log.levels.INFO, { title = "review.nvim" })
   end
 
-  -- Plain review session: close session buffers and end the session
   if hooks.has_plain_session() then
-    local session_bufs = vim.tbl_keys(hooks.get_plain_buffers())
+    -- Plain review session: end the session but keep buffers open
     hooks.clear_current_file()
     storage.clear_plain_session()
+    stop_plain_session_tracking()
     require("review.keymaps").cleanup()
     require("review.marks").clear_all()
     require("review.winbar").clear()
-    for _, bufnr in ipairs(session_bufs) do
-      if vim.api.nvim_buf_is_valid(bufnr) then
-        pcall(vim.cmd, "bdelete " .. bufnr)
-      end
-    end
-    return
+  else
+    -- Close the tab
+    vim.cmd("tabclose")
+    hooks.on_session_closed()
+    storage.clear_revisions()
   end
 
-  -- Close the tab
-  vim.cmd("tabclose")
-  hooks.on_session_closed()
-  storage.clear_revisions()
+  if notes_path and vim.fn.filereadable(notes_path) == 1 then
+    vim.notify("Review notes saved to:\n" .. notes_path, vim.log.levels.INFO, { title = "review.nvim" })
+  end
 end
 
 function M.export()
@@ -255,9 +304,14 @@ function M.preview()
 end
 
 function M.clear()
-  store.clear()
+  local removed = storage.clear_project()
+  store.reset()
   require("review.marks").clear_all()
-  vim.notify("All comments cleared", vim.log.levels.INFO, { title = "review.nvim" })
+  vim.notify(
+    string.format("All review notes cleared (%d file(s) removed)", removed),
+    vim.log.levels.INFO,
+    { title = "review.nvim" }
+  )
 end
 
 function M.count()

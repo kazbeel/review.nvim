@@ -4,6 +4,7 @@ local M = {}
 ---@field comment_types table<string, CommentType>
 ---@field keymaps ReviewKeymaps
 ---@field codediff ReviewCodediffConfig
+---@field codebase ReviewCodebaseConfig
 
 ---@class CommentType
 ---@field key string
@@ -42,7 +43,7 @@ local M = {}
 ---@field show_help string|false
 ---@field popup_cycle_type string|false
 
----@class ReviewPlainConfig
+---@class ReviewCodebaseConfig
 ---@field winbar boolean show the review session marker in the winbar
 
 ---@class ReviewCodediffConfig
@@ -95,7 +96,7 @@ M.defaults = {
   codediff = {
     readonly = true,
   },
-  plain = {
+  codebase = {
     winbar = true,
   },
 }

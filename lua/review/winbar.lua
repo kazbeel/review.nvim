@@ -56,7 +56,7 @@ function M.start()
     group = augroup,
     callback = function()
       local cfg = config.get()
-      if not cfg.plain or cfg.plain.winbar == false then
+      if not cfg.codebase or cfg.codebase.winbar == false then
         return
       end
       if not hooks.get_plain_buffers()[vim.api.nvim_get_current_buf()] then
