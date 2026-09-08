@@ -51,7 +51,8 @@ All commands use the `:Review` prefix.
 
                                                              *:Review-commits*
 :Review commits             Open commit picker (last 50 commits). Use
-                            `<Space>` to select a range, `<CR>` to confirm.
+                            `<Space>` to select from the newest commit down
+                            to the cursor, `<CR>` to confirm.
 
 :Review commits {rev1} {rev2}
                             Review a specific revision range directly,
