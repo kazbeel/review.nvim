@@ -199,17 +199,8 @@ function M.toggle_readonly()
     return
   end
 
-  local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
-
-  -- Update buffer readonly state
-  if orig_buf and vim.api.nvim_buf_is_valid(orig_buf) then
-    vim.api.nvim_set_option_value("modifiable", not cfg.codediff.readonly, { buf = orig_buf })
-    vim.api.nvim_set_option_value("readonly", cfg.codediff.readonly, { buf = orig_buf })
-  end
-  if mod_buf and vim.api.nvim_buf_is_valid(mod_buf) then
-    vim.api.nvim_set_option_value("modifiable", not cfg.codediff.readonly, { buf = mod_buf })
-    vim.api.nvim_set_option_value("readonly", cfg.codediff.readonly, { buf = mod_buf })
-  end
+  -- Update buffer readonly state (tracked so close restores prior values)
+  hooks.set_session_readonly(tabpage, cfg.codediff.readonly)
 
   -- Re-setup keymaps with new readonly state
   keymaps.clear_keymaps()
