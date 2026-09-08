@@ -219,6 +219,14 @@ function M.refresh()
     return
   end
 
+  -- Plain (no-diff) review session: render marks on all session buffers
+  if hooks.has_plain_session() then
+    for bufnr, abs_path in pairs(hooks.get_plain_buffers()) do
+      M.render_for_buffer(bufnr, "plain", hooks.relativize_plain_path(abs_path))
+    end
+    return
+  end
+
   local orig_buf, mod_buf = hooks.get_buffers()
   local orig_path, mod_path = hooks.get_paths()
   if orig_buf then

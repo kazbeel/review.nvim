@@ -2,6 +2,7 @@
 :Review-avante	review.txt	/*:Review-avante*
 :Review-clear	review.txt	/*:Review-clear*
 :Review-close	review.txt	/*:Review-close*
+:Review-codebase	review.txt	/*:Review-codebase*
 :Review-commits	review.txt	/*:Review-commits*
 :Review-export	review.txt	/*:Review-export*
 :Review-list	review.txt	/*:Review-list*
@@ -11,7 +12,6 @@
 review-commands	review.txt	/*review-commands*
 review-config	review.txt	/*review-config*
 review-config-codediff	review.txt	/*review-config-codediff*
-review-config-export	review.txt	/*review-config-export*
 review-contents	review.txt	/*review-contents*
 review-export	review.txt	/*review-export*
 review-highlights	review.txt	/*review-highlights*

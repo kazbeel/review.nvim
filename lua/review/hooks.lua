@@ -7,6 +7,9 @@ local normalize_path = require("review.utils").normalize_path
 ---@type number|nil Current tabpage with active codediff session
 local current_tabpage = nil
 
+---@type table<number, string> bufnr -> absolute path of buffers in the plain (no-diff) review session
+local plain_buffers = {}
+
 ---@type number|nil Autocmd group for buffer events
 local buf_augroup = nil
 
@@ -15,6 +18,9 @@ local readonly_saved = {}
 
 ---@type {original: number|nil, modified: number|nil} Last pair review readonly was applied to
 local session_pair = { original = nil, modified = nil }
+
+---@type table<number, {modifiable: boolean, readonly: boolean}> Pre-review option values per plain-session buffer
+local plain_saved = {}
 
 ---Record a buffer's current options and apply review readonly state
 ---@param bufnr number
@@ -38,9 +44,93 @@ local function restore_buffer_state(bufnr)
   local saved = readonly_saved[bufnr]
   readonly_saved[bufnr] = nil
   if saved and vim.api.nvim_buf_is_valid(bufnr) then
-    vim.api.nvim_set_option_value("modifiable", saved.modifiable, { buf = bufnr })
+    vim.api.nvim_set_option_value(
+      "modifiable",
+      saved.modifiable,
+      { buf = bufnr }
+    )
     vim.api.nvim_set_option_value("readonly", saved.readonly, { buf = bufnr })
   end
+end
+
+---Register a buffer as part of the plain review session.
+---Records the buffer's pre-review options (once) and applies the configured
+---review readonly state.
+---@param abs_path string absolute file path
+---@param bufnr number
+function M.set_current_file(abs_path, bufnr)
+  plain_buffers[bufnr] = abs_path
+  if
+    vim.api.nvim_buf_is_valid(bufnr)
+    and plain_saved[bufnr] == nil
+  then
+    plain_saved[bufnr] = {
+      modifiable = vim.api.nvim_get_option_value("modifiable", { buf = bufnr }),
+      readonly = vim.api.nvim_get_option_value("readonly", { buf = bufnr }),
+    }
+  end
+
+  local readonly = config.get().codediff.readonly
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_set_option_value("modifiable", not readonly, { buf = bufnr })
+    vim.api.nvim_set_option_value("readonly", readonly, { buf = bufnr })
+  end
+end
+
+---End the plain review session: restore each session buffer's pre-review
+---options and release them from the session
+function M.clear_current_file()
+  for bufnr in pairs(plain_buffers) do
+    local saved = plain_saved[bufnr]
+    if saved and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_set_option_value("modifiable", saved.modifiable, { buf = bufnr })
+      vim.api.nvim_set_option_value("readonly", saved.readonly, { buf = bufnr })
+    end
+  end
+  plain_saved = {}
+  plain_buffers = {}
+end
+
+---@return boolean true when a plain review session is active
+function M.has_plain_session()
+  return next(plain_buffers) ~= nil
+end
+
+---@return table<number, string> bufnr -> absolute path mapping
+function M.get_plain_buffers()
+  return plain_buffers
+end
+
+---@return string|nil git root from the current working directory
+local function get_git_root()
+  local handle = io.popen("git rev-parse --show-toplevel 2>/dev/null")
+  if handle then
+    local result = handle:read("*a")
+    handle:close()
+    if result and result ~= "" then
+      return result:gsub("%s+$", "")
+    end
+  end
+  return nil
+end
+
+---Relativize a plain-session path against the git root (or cwd outside a repo)
+---@param path string
+---@return string
+local function relativize_plain(path)
+  local root = get_git_root()
+  if root then
+    local abs = vim.fn.fnamemodify(path, ":p")
+    return normalize_path(abs:gsub("^" .. vim.pesc(root) .. "/", ""))
+  end
+  return normalize_path(vim.fn.fnamemodify(path, ":."))
+end
+
+---Public wrapper for plain-session path relativization (used by marks rendering)
+---@param path string
+---@return string
+function M.relativize_plain_path(path)
+  return relativize_plain(path)
 end
 
 ---Set filetype for a buffer based on file path
@@ -122,8 +212,17 @@ end
 
 ---@return string|nil file path
 ---@return number|nil line number
----@return "old"|"new"|nil side
+---@return "old"|"new"|"plain"|nil side
 function M.get_cursor_position()
+  -- Plain review session: resolve file and line from the tracked buffer
+  if not current_tabpage then
+    local plain_path = plain_buffers[vim.api.nvim_get_current_buf()]
+    if plain_path then
+      local cursor = vim.api.nvim_win_get_cursor(0)
+      return relativize_plain(plain_path), cursor[1], "plain"
+    end
+  end
+
   local lifecycle = get_lifecycle()
   if not lifecycle or not current_tabpage then
     return nil, nil, nil
@@ -257,10 +356,18 @@ function M.on_session_created(tabpage)
   -- Restore buffers that left the session's pair (file navigation, layout
   -- toggle) before applying readonly to the new pair
   local prev = session_pair
-  if prev.original and prev.original ~= orig_buf and prev.original ~= mod_buf then
+  if
+    prev.original
+    and prev.original ~= orig_buf
+    and prev.original ~= mod_buf
+  then
     restore_buffer_state(prev.original)
   end
-  if prev.modified and prev.modified ~= orig_buf and prev.modified ~= mod_buf then
+  if
+    prev.modified
+    and prev.modified ~= orig_buf
+    and prev.modified ~= mod_buf
+  then
     restore_buffer_state(prev.modified)
   end
   session_pair = { original = nil, modified = nil }

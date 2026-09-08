@@ -5,12 +5,23 @@ local data_dir = vim.fn.stdpath("data") .. "/review"
 ---@type {rev1: string, rev2: string}|nil
 local current_revisions = nil
 
+---@type boolean Plain-code review session active (no diff context)
+local plain_session = false
+
 function M.set_revisions(rev1, rev2)
   current_revisions = (rev1 and rev2) and { rev1 = rev1, rev2 = rev2 } or nil
 end
 
 function M.clear_revisions()
   current_revisions = nil
+end
+
+function M.set_plain_session()
+  plain_session = true
+end
+
+function M.clear_plain_session()
+  plain_session = false
 end
 
 ---@return string|nil
@@ -58,14 +69,24 @@ end
 ---@return string|nil
 function M.get_storage_path()
   local git_root = get_git_root()
-  if not git_root then
+
+  -- Plain sessions persist even outside a git repository (keyed by cwd)
+  local project_source = git_root
+  if not project_source and plain_session then
+    project_source = vim.fn.getcwd()
+  end
+  if not project_source then
     return nil
   end
 
-  local project_hash = hash(git_root)
+  local project_hash = hash(project_source)
 
   -- Ensure directory exists (pcall to suppress error if exists)
   pcall(vim.fn.mkdir, data_dir, "p")
+
+  if plain_session then
+    return string.format("%s/%s-plain.json", data_dir, project_hash)
+  end
 
   if current_revisions then
     local r1 = short_rev(current_revisions.rev1)
@@ -150,6 +171,25 @@ function M.clear()
   if path then
     os.remove(path)
   end
+end
+
+---Remove every persisted notes file for the current project (plain, branch,
+---and revision-scoped keys). Works in and out of a review session.
+---@return number count of removed files
+function M.clear_project()
+  local project_source = get_git_root() or vim.fn.getcwd()
+  if not project_source then
+    return 0
+  end
+
+  local pattern = string.format("%s/%s-*.json", data_dir, hash(project_source))
+  local removed = 0
+  for _, filepath in ipairs(vim.fn.glob(pattern, false, true)) do
+    if os.remove(filepath) then
+      removed = removed + 1
+    end
+  end
+  return removed
 end
 
 return M
