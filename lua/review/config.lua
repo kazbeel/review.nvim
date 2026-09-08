@@ -42,6 +42,9 @@ local M = {}
 ---@field show_help string|false
 ---@field popup_cycle_type string|false
 
+---@class ReviewPlainConfig
+---@field winbar boolean show the review session marker in the winbar
+
 ---@class ReviewCodediffConfig
 ---@field readonly boolean
 
@@ -91,6 +94,9 @@ M.defaults = {
   },
   codediff = {
     readonly = true,
+  },
+  plain = {
+    winbar = true,
   },
 }
 

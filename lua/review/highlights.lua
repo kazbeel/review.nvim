@@ -11,6 +11,7 @@ function M.setup()
     ReviewPickerHash = "Identifier",
     ReviewPickerMeta = "Comment",
     ReviewPickerSelected = "String",
+    ReviewWinbar = "Directory",
   }
 
   for group, link in pairs(links) do

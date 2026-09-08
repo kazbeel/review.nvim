@@ -49,6 +49,8 @@ describe("plain review", function()
     store.reset()
     require("review.marks").clear_all()
     require("review.keymaps").clear_keymaps()
+    require("review.winbar").clear()
+    vim.wo[0].winbar = ""
   end)
 
   describe("hooks.get_cursor_position", function()
@@ -304,6 +306,59 @@ describe("plain review", function()
     end)
   end)
 
+  describe("winbar session indicator", function()
+    local review = require("review")
+
+    it("shows the review marker in the winbar while a session is active", function()
+      review.open_file(sample_rel)
+
+      assert.matches("● Review", vim.wo[0].winbar)
+    end)
+
+    it("restores the previous winbar value when the session closes", function()
+      vim.wo[0].winbar = "MY STATUSLINE"
+      review.open_file(sample_rel)
+      assert.matches("● Review", vim.wo[0].winbar)
+
+      review.close()
+
+      assert.equals("MY STATUSLINE", vim.wo[0].winbar)
+    end)
+
+    it("restores an empty winbar to inherit from the global value", function()
+      vim.wo[0].winbar = ""
+      review.open_file(sample_rel)
+
+      review.close()
+
+      assert.equals("", vim.wo[0].winbar)
+    end)
+
+    it("leaves the winbar untouched when disabled in config", function()
+      config.setup({ plain = { winbar = false } })
+      vim.wo[0].winbar = "MY STATUSLINE"
+
+      review.open_file(sample_rel)
+
+      assert.equals("MY STATUSLINE", vim.wo[0].winbar)
+    end)
+
+    it("re-applies the marker when returning to a session buffer", function()
+      review.open_file(sample_rel)
+      local session_buf = vim.api.nvim_get_current_buf()
+      vim.wo[0].winbar = ""
+
+      local outsider = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_name(outsider, "winbar_clobber.lua")
+      vim.cmd("buffer " .. outsider)
+      assert.not_equals(session_buf, vim.api.nvim_get_current_buf())
+      vim.cmd("buffer " .. session_buf)
+
+      assert.matches("● Review", vim.wo[0].winbar)
+      vim.api.nvim_buf_delete(outsider, { force = true })
+    end)
+  end)
+
   describe("toggle_readonly", function()
     local review = require("review")
 
@@ -336,6 +391,19 @@ describe("plain review", function()
 
       assert.is_true(vim.bo[bufnr].readonly)
       assert.truthy(normal_lhs(bufnr)["i"], "readonly-mode add keymap restored")
+    end)
+
+    it("reflects edit mode in the winbar marker", function()
+      review.open_file(sample_rel)
+      assert.not_matches("%(edit%)", vim.wo[0].winbar)
+
+      review.toggle_readonly()
+
+      assert.matches("● Review %(edit%)", vim.wo[0].winbar)
+
+      review.toggle_readonly()
+
+      assert.not_matches("%(edit%)", vim.wo[0].winbar)
     end)
   end)
 end)

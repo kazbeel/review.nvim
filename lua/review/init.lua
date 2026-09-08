@@ -84,6 +84,7 @@ local function open_codediff_with_revisions(rev1, rev2)
   -- A diff review ends any active plain session (storage key must switch)
   hooks.clear_current_file()
   storage.clear_plain_session()
+  require("review.winbar").clear()
 
   -- Scope storage to revision range for commit reviews
   if rev1 and rev2 then
@@ -157,6 +158,11 @@ local function open_plain_review(abs, bufnr)
   end
 
   keymaps.setup_plain_keymaps(bufnr)
+  if not cfg.plain or cfg.plain.winbar ~= false then
+    local winbar = require("review.winbar")
+    winbar.start()
+    winbar.apply(vim.api.nvim_get_current_win())
+  end
   require("review.marks").refresh()
 end
 
@@ -225,6 +231,7 @@ function M.close()
     storage.clear_plain_session()
     require("review.keymaps").cleanup()
     require("review.marks").clear_all()
+    require("review.winbar").clear()
     for _, bufnr in ipairs(session_bufs) do
       if vim.api.nvim_buf_is_valid(bufnr) then
         pcall(vim.cmd, "bdelete " .. bufnr)
@@ -286,6 +293,7 @@ function M.toggle_readonly()
         keymaps.setup_plain_keymaps(bufnr)
       end
     end
+    require("review.winbar").refresh()
 
     local mode = cfg.codediff.readonly and "readonly" or "edit"
     vim.notify("Switched to " .. mode .. " mode", vim.log.levels.INFO, { title = "review.nvim" })
