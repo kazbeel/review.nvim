@@ -1,7 +1,5 @@
 local M = {}
 
-local Popup = require("nui.popup")
-
 ---@class Commit
 ---@field hash string
 ---@field short_hash string
@@ -61,17 +59,56 @@ end
 
 local ns_id = nil
 
-local function is_in_range(idx)
-  if not range_start or not range_end then
+local function current_selection()
+  if range_start and range_end then
+    return { from = range_start, to = range_end }
+  end
+  return nil
+end
+
+--- Compute the selection resulting from a `<Space>` press at row `idx`.
+--- Row 1 is the newest commit, so the selection is always the prefix 1..idx.
+local function press_space(selection, idx, commit_list)
+  if not commit_list[idx] then
+    return selection
+  end
+  return { from = 1, to = idx }
+end
+
+--- Map the selection (or cursor fallback) to codediff revisions.
+--- Returns `oldest.hash .. "^", newest.hash`, or nil, nil when nothing to review.
+local function confirm_revisions(selection, cursor_idx, commit_list)
+  local lo, hi
+
+  if selection then
+    lo = math.min(selection.from, selection.to)
+    hi = math.max(selection.from, selection.to)
+  elseif commit_list[cursor_idx] then
+    lo = cursor_idx
+    hi = cursor_idx
+  end
+
+  if not lo then
+    return nil, nil
+  end
+
+  -- Git log returns newest first, so lower index = newer commit
+  local newest = commit_list[lo]
+  local oldest = commit_list[hi]
+  return oldest.hash .. "^", newest.hash
+end
+
+local function is_in_range(idx, selection)
+  if not selection then
     return false
   end
-  local lo = math.min(range_start, range_end)
-  local hi = math.max(range_start, range_end)
+  local lo = math.min(selection.from, selection.to)
+  local hi = math.max(selection.from, selection.to)
   return idx >= lo and idx <= hi
 end
 
-local function format_line(idx, commit)
-  local in_range = is_in_range(idx)
+local function format_line(idx, commit, selection)
+  local in_range = is_in_range(idx, selection)
   local marker = in_range and "[x]" or "[ ]"
   local hash = commit.short_hash
   local meta = string.format("(%s, %s)", commit.author, commit.date)
@@ -120,9 +157,10 @@ local function render_lines()
   local buf = popup.bufnr
   local lines = {}
   local line_data = {}
+  local selection = current_selection()
 
   for i, commit in ipairs(commits) do
-    local line, hl = format_line(i, commit)
+    local line, hl = format_line(i, commit, selection)
     table.insert(lines, line)
     table.insert(line_data, { hl = hl })
   end
@@ -138,22 +176,15 @@ local function render_lines()
   end
 end
 
-local function toggle_range()
+local function select_range()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local idx = cursor[1]
-  if not commits[idx] then
+  local sel = press_space(current_selection(), idx, commits)
+  if not sel then
     return
   end
-
-  if not range_start then
-    range_start = idx
-    range_end = idx
-  elseif idx == range_start and idx == range_end then
-    range_start = nil
-    range_end = nil
-  else
-    range_end = idx
-  end
+  range_start = sel.from
+  range_end = sel.to
   render_lines()
 end
 
@@ -174,32 +205,10 @@ local function close_picker()
 end
 
 local function confirm_selection(callback)
-  local lo, hi
-
-  if range_start and range_end then
-    lo = math.min(range_start, range_end)
-    hi = math.max(range_start, range_end)
-  else
-    local cursor = vim.api.nvim_win_get_cursor(0)
-    local idx = cursor[1]
-    if commits[idx] then
-      lo = idx
-      hi = idx
-    end
-  end
-
-  if not lo or not hi then
-    close_picker()
-    callback(nil, nil)
-    return
-  end
-
-  -- Git log returns newest first, so lower index = newer commit
-  local newest = commits[lo]
-  local oldest = commits[hi]
-
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local rev1, rev2 = confirm_revisions(current_selection(), cursor[1], commits)
   close_picker()
-  callback(oldest.hash .. "^", newest.hash)
+  callback(rev1, rev2)
 end
 
 function M.open(callback)
@@ -221,6 +230,7 @@ function M.open(callback)
   local width = math.min(120, vim.o.columns - 10)
   local height = math.min(20, #commits + 2, vim.o.lines - 10)
 
+  local Popup = require("nui.popup")
   popup = Popup({
     position = "50%",
     size = {
@@ -232,7 +242,7 @@ function M.open(callback)
       text = {
         top = " Select commits to review ",
         top_align = "center",
-        bottom = " <Space> select range | r reset | <CR> confirm | q quit ",
+        bottom = " <Space> select newest to cursor | r reset | <CR> confirm | q quit ",
         bottom_align = "center",
       },
     },
@@ -262,11 +272,18 @@ function M.open(callback)
 
   -- Keymaps using nui's map method
   local map_opts = { noremap = true, nowait = true }
-  popup:map("n", "<Space>", toggle_range, map_opts)
+  popup:map("n", "<Space>", select_range, map_opts)
   popup:map("n", "<CR>", function() confirm_selection(callback) end, map_opts)
   popup:map("n", "q", close_picker, map_opts)
   popup:map("n", "<Esc>", close_picker, map_opts)
   popup:map("n", "r", select_none, map_opts)
 end
+
+M._test = {
+  press_space = press_space,
+  confirm_revisions = confirm_revisions,
+  is_in_range = is_in_range,
+  format_line = format_line,
+}
 
 return M
