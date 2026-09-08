@@ -173,4 +173,23 @@ function M.clear()
   end
 end
 
+---Remove every persisted notes file for the current project (plain, branch,
+---and revision-scoped keys). Works in and out of a review session.
+---@return number count of removed files
+function M.clear_project()
+  local project_source = get_git_root() or vim.fn.getcwd()
+  if not project_source then
+    return 0
+  end
+
+  local pattern = string.format("%s/%s-*.json", data_dir, hash(project_source))
+  local removed = 0
+  for _, filepath in ipairs(vim.fn.glob(pattern, false, true)) do
+    if os.remove(filepath) then
+      removed = removed + 1
+    end
+  end
+  return removed
+end
+
 return M
