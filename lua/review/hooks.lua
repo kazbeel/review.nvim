@@ -19,42 +19,8 @@ local readonly_saved = {}
 ---@type {original: number|nil, modified: number|nil} Last pair review readonly was applied to
 local session_pair = { original = nil, modified = nil }
 
----Record a buffer's current options and apply review readonly state
----@param bufnr number
-local function apply_readonly_tracked(bufnr)
-  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
-    return
-  end
-  if readonly_saved[bufnr] == nil then
-    readonly_saved[bufnr] = {
-      modifiable = vim.api.nvim_get_option_value("modifiable", { buf = bufnr }),
-      readonly = vim.api.nvim_get_option_value("readonly", { buf = bufnr }),
-    }
-  end
-  vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
-  vim.api.nvim_set_option_value("readonly", true, { buf = bufnr })
-end
-
----Restore a buffer's recorded pre-review options and stop tracking it
----@param bufnr number
-local function restore_buffer_state(bufnr)
-  local saved = readonly_saved[bufnr]
-  readonly_saved[bufnr] = nil
-  if saved and vim.api.nvim_buf_is_valid(bufnr) then
-    vim.api.nvim_set_option_value(
-      "modifiable",
-      saved.modifiable,
-      { buf = bufnr }
-    )
-    vim.api.nvim_set_option_value("readonly", saved.readonly, { buf = bufnr })
-  end
-end
-
----@type table<number, {modifiable: boolean, readonly: boolean}> Pre-review option values per tracked buffer
-local readonly_saved = {}
-
----@type {original: number|nil, modified: number|nil} Last pair review readonly was applied to
-local session_pair = { original = nil, modified = nil }
+---@type table<number, {modifiable: boolean, readonly: boolean}> Pre-review option values per plain-session buffer
+local plain_saved = {}
 
 ---Record a buffer's current options and apply review readonly state
 ---@param bufnr number
@@ -87,15 +53,41 @@ local function restore_buffer_state(bufnr)
   end
 end
 
----Register a buffer as part of the plain review session
+---Register a buffer as part of the plain review session.
+---Records the buffer's pre-review options (once) and applies the configured
+---review readonly state.
 ---@param abs_path string absolute file path
 ---@param bufnr number
 function M.set_current_file(abs_path, bufnr)
   plain_buffers[bufnr] = abs_path
+  if
+    vim.api.nvim_buf_is_valid(bufnr)
+    and plain_saved[bufnr] == nil
+  then
+    plain_saved[bufnr] = {
+      modifiable = vim.api.nvim_get_option_value("modifiable", { buf = bufnr }),
+      readonly = vim.api.nvim_get_option_value("readonly", { buf = bufnr }),
+    }
+  end
+
+  local readonly = config.get().codediff.readonly
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_set_option_value("modifiable", not readonly, { buf = bufnr })
+    vim.api.nvim_set_option_value("readonly", readonly, { buf = bufnr })
+  end
 end
 
----End the plain review session (all tracked buffers are released)
+---End the plain review session: restore each session buffer's pre-review
+---options and release them from the session
 function M.clear_current_file()
+  for bufnr in pairs(plain_buffers) do
+    local saved = plain_saved[bufnr]
+    if saved and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_set_option_value("modifiable", saved.modifiable, { buf = bufnr })
+      vim.api.nvim_set_option_value("readonly", saved.readonly, { buf = bufnr })
+    end
+  end
+  plain_saved = {}
   plain_buffers = {}
 end
 
@@ -360,25 +352,6 @@ function M.on_session_created(tabpage)
   local raw_orig_path, raw_mod_path = lifecycle.get_paths(tabpage)
   set_buffer_filetype(orig_buf, to_path_string(raw_orig_path))
   set_buffer_filetype(mod_buf, to_path_string(raw_mod_path))
-
-  -- Restore buffers that left the session's pair (file navigation, layout
-  -- toggle) before applying readonly to the new pair
-  local prev = session_pair
-  if
-    prev.original
-    and prev.original ~= orig_buf
-    and prev.original ~= mod_buf
-  then
-    restore_buffer_state(prev.original)
-  end
-  if
-    prev.modified
-    and prev.modified ~= orig_buf
-    and prev.modified ~= mod_buf
-  then
-    restore_buffer_state(prev.modified)
-  end
-  session_pair = { original = nil, modified = nil }
 
   -- Restore buffers that left the session's pair (file navigation, layout
   -- toggle) before applying readonly to the new pair
