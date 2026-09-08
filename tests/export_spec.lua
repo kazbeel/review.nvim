@@ -53,6 +53,23 @@ describe("review.export", function()
       assert.matches("src/main.lua:10", md)
       assert.not_matches("~10", md)
     end)
+
+    it("uses plain notation without tilde for plain-side comments", function()
+      store.add("src/main.lua", 10, "issue", "Plain comment", nil, "plain")
+
+      local md = export.generate_markdown()
+      assert.matches("%[ISSUE%]%*%* `src/main%.lua:10`", md)
+      assert.not_matches("~10", md)
+    end)
+
+    it("formats plain-side ranges without tilde on either end", function()
+      store.add("src/main.lua", 10, "issue", "Plain range", 15, "plain")
+
+      local md = export.generate_markdown()
+      assert.matches("%[ISSUE%]%*%* `src/main%.lua:10%-15`", md)
+      assert.not_matches("~10", md)
+      assert.not_matches("~15", md)
+    end)
   end)
 
   describe("to_avante", function()

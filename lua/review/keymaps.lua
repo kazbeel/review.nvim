@@ -182,7 +182,8 @@ local function show_help()
 end
 
 ---@param bufnr number
-local function set_buffer_keymaps(bufnr)
+---@param plain? boolean skip codediff-dependent navigation (plain review session)
+local function set_buffer_keymaps(bufnr, plain)
   -- Clear existing keymaps first
   clear_buffer_keymaps(bufnr)
 
@@ -270,17 +271,20 @@ local function set_buffer_keymaps(bufnr)
   end
 
   -- Navigation and close - available in both modes (or edit mode only for nav)
-  set(km.next_file, navigate("next"), "Next file")
-  set(km.prev_file, navigate("prev"), "Previous file")
-  set(km.toggle_file_panel, function()
-    local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
-    if not ok then return end
-    local tabpage = vim.api.nvim_get_current_tabpage()
-    local explorer_obj = lifecycle.get_explorer(tabpage)
-    if explorer_obj then
-      require("codediff.ui.explorer").toggle_visibility(explorer_obj)
-    end
-  end, "Toggle file panel")
+  -- Plain review sessions skip codediff-dependent file navigation
+  if not plain then
+    set(km.next_file, navigate("next"), "Next file")
+    set(km.prev_file, navigate("prev"), "Previous file")
+    set(km.toggle_file_panel, function()
+      local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+      if not ok then return end
+      local tabpage = vim.api.nvim_get_current_tabpage()
+      local explorer_obj = lifecycle.get_explorer(tabpage)
+      if explorer_obj then
+        require("codediff.ui.explorer").toggle_visibility(explorer_obj)
+      end
+    end, "Toggle file panel")
+  end
   set(km.close, function() require("review").close() end, "Close")
   set(km.toggle_readonly, function() require("review").toggle_readonly() end, "Toggle readonly mode")
   set(km.show_help, show_help, "Show help")
@@ -326,6 +330,13 @@ function M.setup_keymaps(tabpage)
       set_buffer_keymaps(vim.api.nvim_get_current_buf())
     end,
   })
+end
+
+---Attach review keymaps for a plain (no-diff) review session buffer.
+---Codediff-dependent file navigation is not mapped.
+---@param bufnr number
+function M.setup_plain_keymaps(bufnr)
+  set_buffer_keymaps(bufnr, true)
 end
 
 -- Clear keymaps from all tracked buffers
