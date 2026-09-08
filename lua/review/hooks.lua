@@ -10,6 +10,39 @@ local current_tabpage = nil
 ---@type number|nil Autocmd group for buffer events
 local buf_augroup = nil
 
+---@type table<number, {modifiable: boolean, readonly: boolean}> Pre-review option values per tracked buffer
+local readonly_saved = {}
+
+---@type {original: number|nil, modified: number|nil} Last pair review readonly was applied to
+local session_pair = { original = nil, modified = nil }
+
+---Record a buffer's current options and apply review readonly state
+---@param bufnr number
+local function apply_readonly_tracked(bufnr)
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  if readonly_saved[bufnr] == nil then
+    readonly_saved[bufnr] = {
+      modifiable = vim.api.nvim_get_option_value("modifiable", { buf = bufnr }),
+      readonly = vim.api.nvim_get_option_value("readonly", { buf = bufnr }),
+    }
+  end
+  vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
+  vim.api.nvim_set_option_value("readonly", true, { buf = bufnr })
+end
+
+---Restore a buffer's recorded pre-review options and stop tracking it
+---@param bufnr number
+local function restore_buffer_state(bufnr)
+  local saved = readonly_saved[bufnr]
+  readonly_saved[bufnr] = nil
+  if saved and vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_set_option_value("modifiable", saved.modifiable, { buf = bufnr })
+    vim.api.nvim_set_option_value("readonly", saved.readonly, { buf = bufnr })
+  end
+end
+
 ---Set filetype for a buffer based on file path
 ---@param bufnr number
 ---@param path string|nil
@@ -178,6 +211,33 @@ function M.get_paths()
     relativize_path(mod_path, lifecycle, current_tabpage)
 end
 
+---Apply review readonly to the session's buffers (recording prior option
+---values on first touch) or apply edit-mode values
+---@param tabpage number
+---@param enabled boolean readonly mode
+function M.set_session_readonly(tabpage, enabled)
+  local lifecycle = get_lifecycle()
+  if not lifecycle then
+    return
+  end
+  local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
+
+  if enabled then
+    apply_readonly_tracked(orig_buf)
+    apply_readonly_tracked(mod_buf)
+    session_pair = { original = orig_buf, modified = mod_buf }
+  else
+    if orig_buf and vim.api.nvim_buf_is_valid(orig_buf) then
+      vim.api.nvim_set_option_value("modifiable", true, { buf = orig_buf })
+      vim.api.nvim_set_option_value("readonly", false, { buf = orig_buf })
+    end
+    if mod_buf and vim.api.nvim_buf_is_valid(mod_buf) then
+      vim.api.nvim_set_option_value("modifiable", true, { buf = mod_buf })
+      vim.api.nvim_set_option_value("readonly", false, { buf = mod_buf })
+    end
+  end
+end
+
 -- Called when codediff session is created
 function M.on_session_created(tabpage)
   current_tabpage = tabpage
@@ -194,17 +254,21 @@ function M.on_session_created(tabpage)
   set_buffer_filetype(orig_buf, to_path_string(raw_orig_path))
   set_buffer_filetype(mod_buf, to_path_string(raw_mod_path))
 
+  -- Restore buffers that left the session's pair (file navigation, layout
+  -- toggle) before applying readonly to the new pair
+  local prev = session_pair
+  if prev.original and prev.original ~= orig_buf and prev.original ~= mod_buf then
+    restore_buffer_state(prev.original)
+  end
+  if prev.modified and prev.modified ~= orig_buf and prev.modified ~= mod_buf then
+    restore_buffer_state(prev.modified)
+  end
+  session_pair = { original = nil, modified = nil }
+
   -- Make buffers readonly if configured
   local cfg = config.get()
   if cfg.codediff.readonly then
-    if orig_buf and vim.api.nvim_buf_is_valid(orig_buf) then
-      vim.api.nvim_set_option_value("modifiable", false, { buf = orig_buf })
-      vim.api.nvim_set_option_value("readonly", true, { buf = orig_buf })
-    end
-    if mod_buf and vim.api.nvim_buf_is_valid(mod_buf) then
-      vim.api.nvim_set_option_value("modifiable", false, { buf = mod_buf })
-      vim.api.nvim_set_option_value("readonly", true, { buf = mod_buf })
-    end
+    M.set_session_readonly(tabpage, true)
   end
 
   -- Clear old autocmds
@@ -259,6 +323,16 @@ end
 
 -- Called when codediff session is closed
 function M.on_session_closed()
+  -- Only restore when the tracked session's tabpage is gone; TabClosed fires
+  -- for unrelated tabs too
+  local session_gone = current_tabpage == nil
+    or not vim.api.nvim_tabpage_is_valid(current_tabpage)
+  if session_gone then
+    for bufnr in pairs(readonly_saved) do
+      restore_buffer_state(bufnr)
+    end
+    session_pair = { original = nil, modified = nil }
+  end
   current_tabpage = nil
   -- Clean up autocmds
   if buf_augroup then
